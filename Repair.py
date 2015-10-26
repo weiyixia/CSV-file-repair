@@ -1,16 +1,22 @@
 """
+	Repair.py
+
 	This file is designed to repair character delimited files by implementing anomaly detection and using the probability distribution to repair files.
 	The dammages of the file are of 2 kinds:
-		- Arbitrary delimiter, fixed by merging fields
+		- Arbitrary delimiter, fixed by finding misplaced fields and merging fields
 		- Arbitrary new line, fixed by aggregating records
 
 	Assumptions:
 		It is assumed that most of the data in a file are properly structured i.e the mishaps should be marginal
 		
 	Method:
-		The distribution of field counts by records allows us to determine the expected number of fields a record has/should have
-		The distribution of fields having data or not enables to guide field merger (leftward or rightward)
-	
+		The distribution of field counts by records allows us to determine the expected number of fields a record has/should have. This also allows us to know what type of repair a given record will lend itself to.
+		The distribution of fields having data or not enables location of misplaced field and determine merger (leftward or rightward)
+		There are two types of dammaged records respectively repaired by merger and/or aggregation:
+			- Arbitrary delimiters: they have more fields than expected 
+			- Arbitrary new line: they will have less fields than expected
+
+
 	Features:
 		The delimiters are automatically detected: COMMA, TAB, PIPE, SEMI-COLON any other delimiter must be manually specified
 		Non-ascii characters are automatically removed
@@ -70,6 +76,11 @@ class Repair(threading.Thread):
 				
 				if m[i] > self.ncols :
 					self.ncols = int(i)
+			#
+			# After sampling LIMIT records and assessing where the number of fields the majority has
+			# We compare our findings to the first row, if there's a discrepency then it suggests the first row was broken (Alas)
+			# The person exporting the data was too careless to look at what they did ... we got it !!
+			#
 			if line.split(self.xchar) != self.ncols:
 				for aline in lines:
 					if aline.split(self.xchar) == self.ncols:
@@ -156,12 +167,8 @@ class Repair(threading.Thread):
 		#
 		# at this point we can compute ncols, f-ones,entropy
 		f_ones= round(np.sum(rstream) / ncols,2) ;
-		#
 		if f_ones == 0:
 			h = 0;
-
-		#if ncols != len(self.header) :
-		#	rstream = []
 		return rstream;
 	"""
 		This function is designed to classify a given record based on what we know the number of columns ought to be
@@ -178,7 +185,7 @@ class Repair(threading.Thread):
 			self.partial_rec.append(row) ;
 	"""
 		This function will attempt to trim records that have extra delimiters their columns is greater than the expectation
-		
+		@param failed_line	a record with an extra delimiter
 	"""
 	def trim(self,failed_line):
 		if self.xchar in failed_line:
@@ -229,11 +236,7 @@ class Repair(threading.Thread):
 				row[i-1] = " ".join ([row[i-1],value ])
 				index = 1
 			del row[index] 
-			#row[i]= (" ".join([row[i],value])).strip() ;
-			#px    = round(1- lpx[i],2) ;
-			#del row[i+1]
 		
-		#print row
 		return row
 	"""
 	"""
@@ -386,7 +389,6 @@ class Repair(threading.Thread):
 		@param x_row 	binary vector representation of a row
 	"""
 	def compute (self,x_row):
-		
 		self.px = np.add(self.px,x_row) ;
 
 if len(sys.argv) > 1:

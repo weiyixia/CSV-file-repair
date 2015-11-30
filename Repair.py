@@ -140,10 +140,11 @@ class Repair(threading.Thread):
 		@param line	unsplit line as read from the file
 	"""
 	def clean(self,line):
-		if len(re.findall('[\x00-\x1F,\xC0-\xFF,\x7F]',line)) > 0 and self.xchar != '\t':
-			line = re.sub('[\x00-\x1F,\xC0-\xFF,\x7F,\n,\r,\\,\\\\,\b]',' ',line).strip()			
+		#if len(re.findall('[\x00-\x1F,\xC0-\xFF,\x7F]',line)) > 0 and self.xchar != '\t':
+		#	line = re.sub('[\x00-\x1F,\xC0-\xFF,\x7F,\n,\r,\\,\\\\,\b]',' ',line).strip()			
 		
-		line = re.sub('[\n,\r,\v,\b]',' ',line).strip()			
+		#line = re.sub('[\n,\r,\v,\b]',' ',line).strip()			
+		line =  re.sub('(\n|\r|\v|\b)',' ',line.strip())
 		return line.format('utf8');
 	
 	"""
@@ -194,6 +195,10 @@ class Repair(threading.Thread):
 			row = failed_line;
 		#	
 		RANDOM = 0.5
+		print 'self.px is'
+		print self.px
+		print 'self.passed_count is'
+		print self.xchar	
 		lpx = np.divide(self.px,float(self.passed_count))
 		lpx_min = list(Set([px  for px in lpx if float(px) < RANDOM])) ;
 		#lpx_min.sort() ;
@@ -317,7 +322,7 @@ class Repair(threading.Thread):
 					#stats_file.write(self.format([self.name,'repaired-class-1', str(i) ])) ;
 					self.post('heuristic','repaired',i)
 				if len(failure) > 0:
-					i = 100* float(len(failures)/len(self.failed_rec))
+					i = 100* float(len(failure)/len(self.failed_rec))
 					#stats_file.write(self.format([self.name,'failed-class-1', str(i) ])) ;
 					self.post('heuristic','failed',len(failure))
 					fail_file = open(self.files['failed'],'a') ;
@@ -382,7 +387,7 @@ class Repair(threading.Thread):
 		Formatting the to wrap the values in a quoted string
 	"""
 	def format(self,row):
-		return ",".join([ "".join(['"',str(col.strip().replace('"','""')),'"']) for col in row])+"\n"
+		return ",".join([ col.strip() for col in row])+"\n"
 	
 	"""
 		This function performs basic counts on the existance of a value in a field or not

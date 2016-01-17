@@ -7,14 +7,17 @@
 	The quantitative assessment of the data is designed to determine what kind of processing this data would lend itself to
 
 	DESIGN:
+		- Filter & repairs both assume the number of features of a dataset matters and serves as the basis for determining whether or not the records can be used or not.
+			a. records with more features than expected have one or more unexpected delimiters
+			b. records with less features have an unexpected new lines within
 		- Sample records from which we derive statistics
 			a. The assumption here is that most records are properly submitted
 			b. A dataset has structural consistency
+		
 		- From the sample we will derive the following:
 			a. Probability/Frequency of a field having data
 			b. Field length on average
 			c. Field type= {integer, double,date}
-			d. 
 		- Additional features will include scrubbing the data for non-ascii characters and extra whitespaces
 		This should in theory allow for a clean output that is easy to ingest. 
 
@@ -98,10 +101,39 @@ class InspectFieldLength(Inspect):
 		@param row
 	"""
 	def inspect(self,row):
-		
-		m = {True:1,False:0}
-		values = [ m[len(row[i].strip())== self.mean[i]] for i in range(0,self.ncols)]
+		row = self.convert([row])[0]
+		values = [ int(row[i] == self.mean[i]) for i in range(0,self.ncols)]
+		#values = [ int(len(row[i].strip())== self.mean[i]) for i in range(0,self.ncols)]
 		return values;
+"""
+	This class is designed to inspect the probability of a field having data or not having data, 
+"""
+class InspectProbability(Inspect):
+	def __init__(self,sample):
+		Inspect.__init__(self,sample) ;	
+		self.nrows = self.nrows -1 #-- because we skip the header row
+	"""
+		This function converts the sample into a binary matrix from which the probabilities will be derived
+	"""
+	def convert(self,sample):
+		return [[ int(len(col.strip()) > 0) for col in row] for row in sample]
+	
+	def run(self):
+		self.px = np.divide([np.sum(row) for row in np.array(self.sample[1:]).transpose()],self.nrows)
+		threshold = 0.5
+		for i in range(0,self.ncols):
+			if self.px[i] > threshold:
+				self.px[i] = 1
+			else:
+				self.px[i] = 0
+	"""
+		This function expresses agreement with an arbitrary record that is provided i.e zero suggests a disagreement (outliar, not enough information ...)
+		@pre len(row) == self.ncols
+		@param row	arbitrary row (raw)
+	"""
+	def inspect(self,row):
+		r = self.convert([row])[0]
+		return list(np.multiply(self.px,r))
 """
 	This is a base class of determining field types, it is based on regular expressions and a computation of probabilities.
 	Because the computation of probabilities and inspection are identical we abstract it in this class. The sub-classes will implement identification specifications using regex.
@@ -311,6 +343,7 @@ class Disk(Output):
 		self.files = {}
 		for folder in lfolders:
 			if os.path.exists(folder) == False:
+				print folder
 				os.mkdir(folder)
 			if folder != prefix:
 				path = os.sep.join([folder,self.filename])
@@ -344,6 +377,9 @@ class Cloud(Disk):
 """
 	This class is designed to perform basic filter operation in order to plainly separate fields that do not meet the basic requirements in terms of number of columns
 	Basic filtering is based on distinguishing records on the basis of the number of columns estimated in the sample
+	
+	NOTE: This class will assign the clean method from the SamplerBuilder class so as to use it within it's very own context and thus available thoughout the class hierarchy i.e Repair class. This is possible because python is not a full fledged object oriented language ;-) ... call it a clever design hack!!
+	
 """
 class Filter(Thread):
 	def __init__(self,path):
@@ -356,6 +392,7 @@ class Filter(Thread):
 		# Let's determine the the filename and build out output structures
 		# The files will be output to either disk or cloud ...
 		#
+		self.sample	= thread.sample ;
 		self.ncols	= thread.ncols
 		self.xchar	= thread.xchar
 		self.filename 	= path.split(os.sep)
@@ -403,12 +440,20 @@ class Filter(Thread):
 		self.logs[id] = self.logs[id] + 1
 """
 	This class is designed to perform record repairs keeping the base class identical and allowing to assess repairs
+	NOTE:
+		- The base class has taken upon itself to extract the sample
+		- The Inspector class hierarchy will use the sample found
 """
 class Repair(Filter):
 	def __init__(self,path):
 		Filter.__init__(self,path) ;
 		self.extra 	= []
 		self.partial	= []
+		self.threads = {'px':InspectProbability(self.sample),'numeric':InspectNumericField(self.sample),'len':InspectFieldLength(self.sample),'date':InspectDateField(self.sample)} ;
+		[thread.start() for thread in self.threads]
+	"""
+		In addition to capturing and storing records this function will also classify broken records.
+	"""
 	def post(self,id,row):
 		Filter.post(id,row)
 		if id == 'broken':
@@ -416,6 +461,107 @@ class Repair(Filter):
 				self.extra.append(row)
 			else:
 				self.partial.append(row)
-		
+	def run(self):
+		Filter.run() ;
+		ids = self.threads.keys()
+		#
+		# We need to make sure the threads have finished learning what they need to learn
+		# It is only possible to continue if the threads have completed so we can run the repairs
+		#
+		while True:
+			count = [ int(thread.isAlive()) for thread in self.threads.values()]
+			if sum(count) == len(ids):
+				break
+		#
+		# Now we can under take repairs:
+		#	a. Records with extra delimiters will require fields to be merged
+		#	b. Partial records will require they be aggregated with other records
+		#
+		m = [self.merge(row) for row in self.extra]
+		[self.post('fixed',row) for row in m if row is not None]
+	"""
+		The merge operation consists in addressing records with an extra delimiter, the function will return the end-result
+		@pre len(row) > self.ncols
+		@param row	row with extra delimiter
+	"""
+	def merge(self,row):
+		#
+		# Let's find a record that is out of place
+		#
+		px = self.threads['px'] ;
+		pi = px.convert(row)
+		for i in range(0,self.ncols):
+			if px[i] != pi[i] :
+				break
+		rmrow = []	#-- right merge row, what the row would be like should it be merged right
+		lmrow = []	#-- left merge row, what the row would be like should it be merged left
+
+		if px[i] != pi[i]:
+			value = row[i]
+			if i -1 > 0:
+				lmrow = list(row)
+				lmrow [i-1]= " ".join([lmrow[i-1],value])
+				del lmrow [i]
+			if i+1 < self.ncols:
+				rmrow = list(row)
+				rmrow[i+1] = " ".join([rmrow[i],value])
+				del rmrow [i]
+		else:
+			return None
+		#
+		# We find the best probabilistic fit for the evaluation we have performed 
+		# The best fit is assessed by the sum operator: The evaluation with the most agreement will be the best fit
+		#
+		rvalue = np.sum(px.inspect(rmrow))
+		lvalue = np.sum(px.inspect(lmrow))
+		if r > l:
+			nrow = rmrow ;
+		else:
+			nrow = lmrow ;
+	
+		#
+		# At this point we need to inspect if the length of the rows match expectations
+		# If not we continue the merge process until the row doesn't meet the preconditions to be processed here
+		#
+		if len(nrow) == self.ncols :
+			#
+			# We are settle on the merger and we should return the value
+			# But before returning the value we need to make sure we have broader consensus on the repairs
+			#
+			m = [thread.inspect(nrow)[i] for thread in self.threads.values()]
+			N = len(self.threads)
+			threshold = 0.5
+			if m/N > threshold:
+				return nrow
+			else:
+				return None
+		elif len(nrow) > self.ncols :
+			#
+			# At this point we assume there are more unexpected delimiters
+			#
+			self.merge(nrow)
+		else:
+			return None
+	"""
+		This function is designed to repair records with an arbitrary an unexpected new line i.e the number of features would less than expectated number of features
+	"""
+	def aggregate(self,row):
+		index = ([i for i in range(0,self.partial) if self.partial[i] == row])[0]
+		nrow	= list(row)
+		for i in range(index,len(self.partial)) :
+			nrow + self.partial[i]
+			if len(nrow) > self.ncols:
+				r = self.merge(nrow)
+				if r is not None:
+					nrow = r
+				
+				del self.partial[0:i]
+				return None;
+			
+			if len(nrow) == self.ncols:
+				del self.partial[0:i]
+				return nrow 
+
+				
 r = Filter('data/fl-insurance.csv')
 r.start()

@@ -161,6 +161,7 @@ class InspectFieldType(Inspect):
 		threshold = 0.5
 		m = {True:1,False:0}
 		self.px = [ m[p > threshold] for p in self.px]
+		self.px = list(self.px)
 		
 	"""
 		This function will assert if a row is a numeric type or not by returning a binary stream
@@ -384,7 +385,7 @@ class Cloud(Disk):
 class Filter(Thread):
 	def __init__(self,path):
 		Thread.__init__(self)
-		thread = SampleBuilder(path) ;
+		thread = SampleBuilder(path,1000) ;
 		thread.start() ;
 		thread.join() ;
 		
@@ -411,7 +412,7 @@ class Filter(Thread):
 		self.handler.init()
 	
 	def format (self,row):
-		return ",".join(row) ;
+		return ",".join(row+['\n']) ;
 	"""
 		The filtering will consist in being able to separate proper files against the number of columns
 	"""
@@ -450,26 +451,27 @@ class Repair(Filter):
 		self.extra 	= []
 		self.partial	= []
 		self.threads = {'px':InspectProbability(self.sample),'numeric':InspectNumericField(self.sample),'len':InspectFieldLength(self.sample),'date':InspectDateField(self.sample)} ;
-		[thread.start() for thread in self.threads]
+		[thread.start() for thread in self.threads.values()]
 	"""
 		In addition to capturing and storing records this function will also classify broken records.
 	"""
 	def post(self,id,row):
-		Filter.post(id,row)
+		Filter.post(self,id,row)
 		if id == 'broken':
 			if len(row) > self.ncols:
+				
 				self.extra.append(row)
 			else:
 				self.partial.append(row)
 	def run(self):
-		Filter.run() ;
+		Filter.run(self) ;
 		ids = self.threads.keys()
 		#
 		# We need to make sure the threads have finished learning what they need to learn
 		# It is only possible to continue if the threads have completed so we can run the repairs
 		#
 		while True:
-			count = [ int(thread.isAlive()) for thread in self.threads.values()]
+			count = [ int(thread.isAlive() == False) for thread in self.threads.values()]
 			if sum(count) == len(ids):
 				break
 		#
@@ -477,8 +479,15 @@ class Repair(Filter):
 		#	a. Records with extra delimiters will require fields to be merged
 		#	b. Partial records will require they be aggregated with other records
 		#
-		m = [self.merge(row) for row in self.extra]
-		[self.post('fixed',row) for row in m if row is not None]
+		
+		if len(self.extra) > 0:
+			m = [self.merge(row) for row in self.extra]
+			[self.post('fixed',row) for row in m if row is not None]
+		
+		if len(self.partial) > 0:
+			m = [self.aggregate(row) for row in self.partial]
+			[self.post('fixed',row) for row in m if row is not None]
+		print self.logs
 	"""
 		The merge operation consists in addressing records with an extra delimiter, the function will return the end-result
 		@pre len(row) > self.ncols
@@ -486,18 +495,26 @@ class Repair(Filter):
 	"""
 	def merge(self,row):
 		#
-		# Let's find a record that is out of place
+		# Let's find a record that is out of place, 
+		# A merger would require an alpha-numeric field to be involved,
+		# Misplaced fields are identified by either a disagreement upon inspection of a field having data or not or an agreement with the wrong data type
+		# @TODO: Consider adding inspecting type to make sure typing disagreement
 		#
-		px = self.threads['px'] ;
-		pi = px.convert(row)
+		pn = self.threads['numeric'].inspect(row)
+		px =  self.threads['px'].inspect(row[0:self.ncols])
 		for i in range(0,self.ncols):
-			if px[i] != pi[i] :
+			
+			#if px[i] == pi[i] and pn[i] == 0 :
+			if px[i] == 1 and pn[i] == 0 or px[i] == 0 :
 				break
 		rmrow = []	#-- right merge row, what the row would be like should it be merged right
 		lmrow = []	#-- left merge row, what the row would be like should it be merged left
 
-		if px[i] != pi[i]:
+		
+		#if px[i] != pi[i] and pn[i] == 0:
+		if px[i] == 1 and pn[i] == 0 or px[i] == 0 :
 			value = row[i]
+			
 			if i -1 > 0:
 				lmrow = list(row)
 				lmrow [i-1]= " ".join([lmrow[i-1],value])
@@ -512,13 +529,19 @@ class Repair(Filter):
 		# We find the best probabilistic fit for the evaluation we have performed 
 		# The best fit is assessed by the sum operator: The evaluation with the most agreement will be the best fit
 		#
-		rvalue = np.sum(px.inspect(rmrow))
-		lvalue = np.sum(px.inspect(lmrow))
-		if r > l:
+		if len(rmrow) == 0:
+			rvalue = 0
+		else:
+			rvalue = np.sum(self.threads['px'].inspect(rmrow[0:self.ncols]))
+		if len(lmrow) == 0:
+			lvalue = 0
+		else:
+			lvalue = np.sum(self.threads['px'].inspect(lmrow[0:self.ncols]))
+		if rvalue > lvalue:
 			nrow = rmrow ;
 		else:
 			nrow = lmrow ;
-	
+		
 		#
 		# At this point we need to inspect if the length of the rows match expectations
 		# If not we continue the merge process until the row doesn't meet the preconditions to be processed here
@@ -528,40 +551,52 @@ class Repair(Filter):
 			# We are settle on the merger and we should return the value
 			# But before returning the value we need to make sure we have broader consensus on the repairs
 			#
-			m = [thread.inspect(nrow)[i] for thread in self.threads.values()]
+			m = np.sum([thread.inspect(nrow)[i] for thread in self.threads.values()])
 			N = len(self.threads)
 			threshold = 0.5
 			if m/N > threshold:
 				return nrow
 			else:
+				print len(nrow),m/N,threshold, np.divide(m,N)
+				print nrow
 				return None
 		elif len(nrow) > self.ncols :
 			#
 			# At this point we assume there are more unexpected delimiters
 			#
-			self.merge(nrow)
+			return self.merge(nrow)
 		else:
+			print rmrow
+			print lmrow
 			return None
 	"""
 		This function is designed to repair records with an arbitrary an unexpected new line i.e the number of features would less than expectated number of features
 	"""
 	def aggregate(self,row):
-		index = ([i for i in range(0,self.partial) if self.partial[i] == row])[0]
+		
+		index = [i for i in range(0,len(self.partial)) if self.partial[i] == row]
+		index = index[0] + 1
 		nrow	= list(row)
 		for i in range(index,len(self.partial)) :
-			nrow + self.partial[i]
+			#if row == self.partial[i]:
+			#	continue ;
+			next_row = list(self.partial[i])
+			#value = nrow[len(nrow)-1] +' '+ next_row[0]
+			#nrow[len(nrow)-1] = value
+			#del next_row[0]
+			nrow = nrow + next_row ; #self.partial[i]
 			if len(nrow) > self.ncols:
 				r = self.merge(nrow)
 				if r is not None:
 					nrow = r
-				
+				print r
 				del self.partial[0:i]
 				return None;
 			
 			if len(nrow) == self.ncols:
 				del self.partial[0:i]
 				return nrow 
-
+		return None
 				
-r = Filter('data/fl-insurance.csv')
+r = Repair('data/small.csv')
 r.start()

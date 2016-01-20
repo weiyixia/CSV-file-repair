@@ -120,6 +120,7 @@ class InspectProbability(Inspect):
 	
 	def run(self):
 		self.px = np.divide([np.sum(row) for row in np.array(self.sample[1:]).transpose()],self.nrows)
+		self.px_values = list(self.px)
 		threshold = 0.5
 		for i in range(0,self.ncols):
 			if self.px[i] > threshold:
@@ -157,10 +158,10 @@ class InspectFieldType(Inspect):
 			We will compute the probability/frequencies found given the data converted
 			the result will be a binary stream that will serve as a basis for assessment
 		"""
-		self.px = np.divide([ np.sum(row) for row in np.array(self.sample[1:]).transpose()],self.nrows)
+		self.px_values = np.divide([ np.sum(row) for row in np.array(self.sample[1:]).transpose()],self.nrows)
 		threshold = 0.5
 		m = {True:1,False:0}
-		self.px = [ m[p > threshold] for p in self.px]
+		self.px = [ m[p > threshold] for p in self.px_values]
 		self.px = list(self.px)
 		
 	"""
@@ -295,7 +296,7 @@ class SampleBuilder(Thread):
 			cols = row.split(self.xchar)
 		else:
 			cols = row ;
-		r = [ re.sub('[^\x00-\x7F,\n,\r,\v,\b]',' ',col).strip()for col in cols]
+		r = [ re.sub('[^\x00-\x7F,\n,\r,\v,\b]',' ',col.strip()) for col in cols]
 		
 		if isinstance(row,list) == False:
 			return (self.xchar.join(r)).format('utf-8') 
@@ -460,9 +461,9 @@ class Repair(Filter):
 		if id == 'broken':
 			if len(row) > self.ncols:
 				
-				self.extra.append(row)
+				self.extra.append( self.clean(row))
 			else:
-				self.partial.append(row)
+				self.partial.append(self.clean(row))
 	def run(self):
 		Filter.run(self) ;
 		ids = self.threads.keys()
@@ -501,7 +502,8 @@ class Repair(Filter):
 		# @TODO: Consider adding inspecting type to make sure typing disagreement
 		#
 		pn = self.threads['numeric'].inspect(row)
-		px =  self.threads['px'].inspect(row[0:self.ncols])
+		px = self.threads['px'].inspect(row[0:self.ncols])
+		
 		for i in range(0,self.ncols):
 			
 			#if px[i] == pi[i] and pn[i] == 0 :
@@ -513,15 +515,17 @@ class Repair(Filter):
 		
 		#if px[i] != pi[i] and pn[i] == 0:
 		if px[i] == 1 and pn[i] == 0 or px[i] == 0 :
-			value = row[i]
+			value = row[i].strip()
 			
 			if i -1 > 0:
 				lmrow = list(row)
-				lmrow [i-1]= " ".join([lmrow[i-1],value])
+				lmrow [i-1]= " ".join([lmrow[i-1].strip(),value])
+				lmrow = self.clean(lmrow)
 				del lmrow [i]
 			if i+1 < self.ncols:
 				rmrow = list(row)
-				rmrow[i+1] = " ".join([rmrow[i],value])
+				rmrow[i+1] = " ".join([value,rmrow[i].strip()])
+				rmrow = self.clean(rmrow)
 				del rmrow [i]
 		else:
 			return None
@@ -532,11 +536,11 @@ class Repair(Filter):
 		if len(rmrow) == 0:
 			rvalue = 0
 		else:
-			rvalue = np.sum(self.threads['px'].inspect(rmrow[0:self.ncols]))
+			rvalue = self.threads['px'].inspect(rmrow[0:self.ncols])[i]
 		if len(lmrow) == 0:
 			lvalue = 0
 		else:
-			lvalue = np.sum(self.threads['px'].inspect(lmrow[0:self.ncols]))
+			lvalue = self.threads['px'].inspect(lmrow[0:self.ncols])[i]
 		if rvalue > lvalue:
 			nrow = rmrow ;
 		else:
@@ -553,12 +557,10 @@ class Repair(Filter):
 			#
 			m = np.sum([thread.inspect(nrow)[i] for thread in self.threads.values()])
 			N = len(self.threads)
-			threshold = 0.5
+			threshold = 1/N #-- acceptance criteria
 			if m/N > threshold:
 				return nrow
 			else:
-				print len(nrow),m/N,threshold, np.divide(m,N)
-				print nrow
 				return None
 		elif len(nrow) > self.ncols :
 			#
@@ -566,8 +568,6 @@ class Repair(Filter):
 			#
 			return self.merge(nrow)
 		else:
-			print rmrow
-			print lmrow
 			return None
 	"""
 		This function is designed to repair records with an arbitrary an unexpected new line i.e the number of features would less than expectated number of features
@@ -585,13 +585,14 @@ class Repair(Filter):
 			#nrow[len(nrow)-1] = value
 			#del next_row[0]
 			nrow = nrow + next_row ; #self.partial[i]
+			
 			if len(nrow) > self.ncols:
 				r = self.merge(nrow)
 				if r is not None:
 					nrow = r
-				print r
-				del self.partial[0:i]
-				return None;
+				else:
+					del self.partial[0:i]
+					return None;
 			
 			if len(nrow) == self.ncols:
 				del self.partial[0:i]

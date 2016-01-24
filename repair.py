@@ -148,7 +148,7 @@ class InspectFieldType(Inspect):
 	def __init__(self,sample):
 		Inspect.__init__(self,sample) ;
 		self.nrows = self.nrows -1 #-- because we skip the header row
-		self.pattern = None;
+		#self.pattern = None;
 	"""
 		This function will convert the sample into a binary stream given a field is numeric or not
 		@param sample sample data (matrix)

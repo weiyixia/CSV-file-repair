@@ -29,6 +29,11 @@
 		- Implement input the same way outpout was implemented and find a way to tightly couple input/output streams
 		This allows us to be able to work from big-table, dropbox, disk, one-drive or google-drive transparently
 		
+	In order to execute the program 
+		
+		from repair import Repair
+		thread = Repair('<path-to-file>',<'output-folder'>)
+		thread.start()
 
 """
 
@@ -384,7 +389,7 @@ class Cloud(Disk):
 	
 """
 class Filter(Thread):
-	def __init__(self,path):
+	def __init__(self,path,ofolder='tmp'):
 		Thread.__init__(self)
 		thread = SampleBuilder(path,1000) ;
 		thread.start() ;
@@ -409,7 +414,7 @@ class Filter(Thread):
 		#
 		# We need to have a handler to post the output stream to either cloud/queue/disk
 		# This 
-		self.handler = Disk(self.filename,'tmp') ;
+		self.handler = Disk(self.filename,ofolder) ;
 		self.handler.init()
 	
 	def format (self,row):
@@ -447,8 +452,8 @@ class Filter(Thread):
 		- The Inspector class hierarchy will use the sample found
 """
 class Repair(Filter):
-	def __init__(self,path):
-		Filter.__init__(self,path) ;
+	def __init__(self,path,ofolder='tmp'):
+		Filter.__init__(self,path,ofolder) ;
 		self.extra 	= []
 		self.partial	= []
 		self.threads = {'px':InspectProbability(self.sample),'numeric':InspectNumericField(self.sample),'len':InspectFieldLength(self.sample),'date':InspectDateField(self.sample)} ;
@@ -599,5 +604,3 @@ class Repair(Filter):
 				return nrow 
 		return None
 				
-r = Repair('data/small.csv')
-r.start()

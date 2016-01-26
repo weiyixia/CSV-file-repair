@@ -667,17 +667,17 @@ class Repair(Filter):
 		for i in range(0,self.ncols):
 			
 			#if px[i] == pi[i] and pn[i] == 0 :
-			if px[i] == 1 and pn[i] == 0 or px[i] == 0 :
+			if (px[i] == 1 and pn[i] == 0) or px[i] == 0 :
 				break
 		rmrow = []	#-- right merge row, what the row would be like should it be merged right
 		lmrow = []	#-- left merge row, what the row would be like should it be merged left
 
 		
 		#if px[i] != pi[i] and pn[i] == 0:
-		if px[i] == 1 and pn[i] == 0 or px[i] == 0 :
+		if (px[i] == 1 and pn[i] == 0) or px[i] == 0 :
 			value = row[i].strip()
 			
-			if i -1 > 0:
+			if i -1 >= 0:
 				lmrow = list(row)
 				lmrow [i-1]= " ".join([lmrow[i-1].strip(),value])
 				lmrow = self.clean(lmrow)

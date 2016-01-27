@@ -1,6 +1,6 @@
 # CSV-file-repair
 <script src="https://google-code-prettify.googlecode.com/svn/loader/run_prettify.js"></script>
-A tool for automatically repairing a broken delimiter seperated file using statistics of the columns and inference.
+A tool for automatically repairing a broken delimiter seperated file based on statistical inference and machine learning.
 
 It provides statistics of the contents of the file.
 

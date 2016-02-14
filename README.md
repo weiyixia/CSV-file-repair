@@ -27,11 +27,11 @@ This engine can be applied in either filter-mode or repair-mode:
   </code>
   
   <code class="prettify">
-  r = repair.Repair('sample-broken.csv')
+  repairThread = repair.Repair('sample-broken.csv')
   </code>
   
   <code class="prettify">
-  r.run()
+  repairThread.start()
   </code>
 <br>
 

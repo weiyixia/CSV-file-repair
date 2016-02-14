@@ -2,10 +2,17 @@
 
 <script src="https://google-code-prettify.googlecode.com/svn/loader/run_prettify.js"></script>
 
+#Motivation
+
+This engine demonstrates how a learning component can serve as a solution to a problem that would otherwise have been addressed by developing custom parsers to every field and error associated with a dataset. This is NOT scalable. A learning algorithm is a single write and can generalize without new code being written
+
+#Description
+
 This engine repairs any character delimited file using an approach
 based on [anomaly detection](https://en.wikipedia.org/wiki/Anomaly_detection) & [ensemble learning](https://en.wikipedia.org/wiki/Ensemble_learning) across n-features in any
 dataset. The file repair engine also provides a quantitative assessment of the
 data to determine what kind of processing this data would lend itself to.
+
 
 #Features:
 

@@ -6,9 +6,7 @@
 
 This engine demonstrates how a learning component can serve as a solution to a problem that would otherwise have been addressed by developing custom parsers to every field and error associated with a dataset. 
 
-Writing parsers for every case/field/error and dataset is NEITHER practical NOR scalable. 
-
-We propose a learning algorithm/component because it is code written once that can generalize without new code being written
+Writing parsers for every case/field/error and dataset is NEITHER practical NOR scalable. So we propose a learning algorithm/component because it is code written once that can generalize without new code being written
 
 #Description
 

@@ -1,6 +1,6 @@
 
 """
-  Weiyi Xia, xwy0220@gmail.com
+  	Weiyi Xia, xwy0220@gmail.com
 	Steve L. Nyemba, steve@the-phi.com
 	
 	This program is design to clean up fields that have several parts to it like name, address. The program tries to find/learn about the various representations of a name/address by building a context model.

@@ -33,7 +33,7 @@ from threading import Thread
 import re
 import numpy as np
 from sets import Set
-
+from fuzzywuzzy import fuzz
 
 class ILearnContext(Thread):
 	"""
@@ -123,7 +123,7 @@ class SimpleContextLearner(ILearnContext):
         ii = [ len(self.bags[id]) for id in self.bags.keys() if int(id) > 2]
 	id = self.bags.keys()[ii.index(np.max(ii))]
 	self.size = int(id) ;
-    
+
     def run(self):
         context = self.build(self.size)
         bag = self.bags[str(self.size)]
@@ -137,32 +137,43 @@ class SimpleContextLearner(ILearnContext):
 				continue ;
 			phrase = bag[ii]
 			#
-			# Can we learn anything from the current phrase
-			# Knowing the phrases are different, we look for commonalities
+			# phrase Xo and bag[ii] are different and thus we can learn from
+			# Knowing the phrases are different, we look for commonalities of terms
 			#
 
 			Z = [concept for concept in Xo if len(Set(concept) & Set(phrase)) >= len(concept)]
 			if len(Z) > 0 :
 				#
-				# We have viable information in the phrase
-				# We need the missing terms 
+				# We have viable information in two phrases i.e
+				# We will determine exclusive terms to the context:
+				#       - Xo
+				#       - Yo
 				#
+				print self.size,Z
 				Xo = [concept for concept in Xo if concept not in Z]
 				Yo = [concept for concept in context[ii] if concept not in Z]
 				r  = []
 				for x in Xo:
 					for y in Yo:
-						if len(Set(x) & Set(y)) > 0:
+						xy = Set(x) & Set(y)
+						if len(xy) > 0:
 							match = list( Set(x) ^ Set(y))
 							if match not in r:
+								Pm =  fuzz.ratio(list(Set(x)-Set(y)),list(Set(y)-Set(x)))/ 100
+								Px =  len(Z) /len(context[i])
+								print [Pm,Px, np.mean([Pm,Px])]
+								print Set(x) - Set(y)
+								print Set(y) - Set(x)
+								return 0
+                                
 								#
 								# @TODO:
 								#	Make sure the decision to keep a pair is implemented
 								#	Also it needs to be persisted instead of so as to shorten the number of iterations
 								#
 								r.append(match)
-				print r		
-	
+				print r
+
 f = open('/Users/steve/Downloads/data/Accreditation_2015_12/Accreditation_2015_12.csv','rU')
 data = [line.split(',') for line in f]
 thread = SimpleContextLearner(data,2)

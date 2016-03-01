@@ -18,7 +18,6 @@
 
 	METHOD:
 		We believe that with little data it is possible to make the appropriate general inferences needed. This why we use skip-grams to build out context even though there may not be a large volume of data.
-
 		Children don't have much data about the world but are capable of generalizing concepts in the restricted world they live in. Generalizing this concept and applying it through a broad spectrum of domains allows better understanding & learning.
 
 	DEPENDENCIES:
@@ -50,10 +49,10 @@ class ILearnContext(Thread):
 		self.organize(sample,field)
 	"""
 		Organizes a given field index into bags of words.
-        The bags of words will serve as basis for generating context (skip-grams)
+		The bags of words will serve as basis for generating context (skip-grams)
 
-        @param sample   sample data from which learning is performed
-        @param field  index of the field we want to extract concepts from
+		@param sample   sample data from which learning is performed
+		@param field  index of the field we want to extract concepts from
 	"""
 	def organize(self,sample,field) :
 
@@ -88,11 +87,17 @@ class ILearnContext(Thread):
 	"""
 		Builds and returns context (skip-grams) given the size of the n-grams
 
-		@pre size in self.bag_sizes
-		@param size	n-gram size
+		@pre size 	in self.bag_sizes
+		@param size	n-gram size 
 	"""
 	def build(self,size):
-
+		#
+		# The selected field is broken and grouped into feature size 
+		# Selecting a feature size will give access to the records that match that criteria
+		#
+		# @TODO:
+		#	- have a learning algorithm that can determine these sizes given the Central Limit Theorem
+		#
 		keys = self.bags.keys() ;
 		id = [key for key in keys if int(key) == size]
 		id = id[0]

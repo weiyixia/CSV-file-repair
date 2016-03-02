@@ -157,11 +157,9 @@ class SimpleContextLearner(ILearnContext):
 			#
 			Z = Set(bag[i]) & Set(bag[ii])
 			#
-			# phrase Xo and bag[ii] are different and thus we can learn from
-			# Knowing the phrases are different, we look for commonalities of terms
+			# Having common terms doesn't mean identical context
+			# Unless the size of the intersection is greater or equal to an n-gram
 			#
-
-			#Z = [concept for concept in Xo if len(Set(concept) & Set(phrase)) >= len(concept)]
 			if len(Z) > 0 and  len(Z) >= len(Xo[0]):
 				#
 				# Common terms in context evaluate the probability of being of the same context
@@ -180,12 +178,15 @@ class SimpleContextLearner(ILearnContext):
 				g = NGram(Yo_)
 				for index in range(0,size):
 					id = Xo_[index]
-					#X = list(process.extractOne([id],Yo_))
 					X = [[term , fuzz.ratio(id,term)/100] for term in Yo_]
 					if len(X) == 0:
 						continue
 					X = max(X)
 					if X[1] > 0.5 and len(X[0]) > len(id) and id not in info:
+						#
+						# @TODO: Apply some form of joint probability, unfortunately it doesn't lend itself to bayesian analysis
+						# The joint probability will be used and needs a laymans formulation
+						#
 						X[1] = X[1]
 						info[id] = X
 						print [id,Pz]+info[id]

@@ -2,8 +2,9 @@
   	Weiyi Xia, xwy0220@gmail.com
 	Steve L. Nyemba, steve@the-phi.com
 
-	This program is design to clean up fields that have several parts to it like name, address. The program tries to find/learn about the various representations of a name/address by building a context model.
-
+	This program is design to clean up fields that have several parts to it like name, address. 
+	The program tries to find/learn about the various representations of a name/address by building a context model.
+	
 	Building context allows us to be able to infer names/addresses given a representation. For example:
 	- A name like B. Malin is probably Bradley Malin
 	- An address like Pleasant Springs Dr, is Probably Pleasant Springs Drive
@@ -17,13 +18,21 @@
 		- contextual match
 
 	METHOD:
-		We believe that with little data it is possible to make the appropriate general inferences needed. This why we use skip-grams to build out context even though there may not be a large volume of data.
-		Children don't have much data about the world but are capable of generalizing concepts in the restricted world they live in. Generalizing this concept and applying it through a broad spectrum of domains allows better understanding & learning.
+		The idea of building skip-grams to model context is well known in the research community 
+			http://homepages.inf.ed.ac.uk/ballison/pdf/lrec_skipgrams.pdf
+			https://scholar.google.com
+		
+		We believe that with little data it is possible to make the appropriate general inferences needed. 
+		This why we use skip-grams to build out context even though there may not be a large volume of data.
+		Children don't have much data about the world but are capable of generalizing concepts in the restricted world they live in. 
+		Generalizing this concept and applying it through a broad spectrum of domains allows better understanding & learning.
+
 
 	DEPENDENCIES:
 		pip install python-Levenshtein
 		pip install fuzzywuzzy
-        pip install numpy
+		pip install numpy
+
 """
 
 
@@ -32,7 +41,8 @@ from threading import Thread
 import re
 import numpy as np
 from sets import Set
-from fuzzywuzzy import fuzz
+from fuzzywuzzy import fuzz, process
+from ngram import NGram
 
 class ILearnContext(Thread):
 	"""
@@ -128,7 +138,6 @@ class SimpleContextLearner(ILearnContext):
         ii = [ len(self.bags[id]) for id in self.bags.keys() if int(id) > 2]
 	id = self.bags.keys()[ii.index(np.max(ii))]
 	self.size = int(id) ;
-
     def run(self):
         context = self.build(self.size)
         bag = self.bags[str(self.size)]
@@ -141,44 +150,47 @@ class SimpleContextLearner(ILearnContext):
 			if i == ii or bag[i] == bag[ii]:
 				continue ;
 			phrase = bag[ii]
+			Yo = context[ii]
+			#
+			# We look for common terms within the 2 candidates
+			# Once the intersections is found we should determine if they make up a context
+			#
+			Z = Set(bag[i]) & Set(bag[ii])
 			#
 			# phrase Xo and bag[ii] are different and thus we can learn from
 			# Knowing the phrases are different, we look for commonalities of terms
 			#
 
-			Z = [concept for concept in Xo if len(Set(concept) & Set(phrase)) >= len(concept)]
-			if len(Z) > 0 :
+			#Z = [concept for concept in Xo if len(Set(concept) & Set(phrase)) >= len(concept)]
+			if len(Z) > 0 and  len(Z) >= len(Xo[0]):
 				#
-				# We have viable information in two phrases i.e
-				# We will determine exclusive terms to the context:
-				#       - Xo
-				#       - Yo
+				# Common terms in context evaluate the probability of being of the same context
+				# Pz :
 				#
-				print self.size,Z
-				Xo = [concept for concept in Xo if concept not in Z]
-				Yo = [concept for concept in context[ii] if concept not in Z]
-				r  = []
-				for x in Xo:
-					for y in Yo:
-						xy = Set(x) & Set(y)
-						if len(xy) > 0:
-							match = list( Set(x) ^ Set(y))
-							if match not in r:
-								Pm =  fuzz.ratio(list(Set(x)-Set(y)),list(Set(y)-Set(x)))/ 100
-								Px =  len(Z) /len(context[i])
-								print [Pm,Px, np.mean([Pm,Px])]
-								print Set(x) - Set(y)
-								print Set(y) - Set(x)
-								return 0
-                                
-								#
-								# @TODO:
-								#	Make sure the decision to keep a pair is implemented
-								#	Also it needs to be persisted instead of so as to shorten the number of iterations
-								#
-								r.append(match)
-				print r
-
+				Pz =  len(Z) / len(phrase)
+				#
+				# The levenshtein distances give us the matches of
+				# X will contain the tuple {word,ratio}. 
+				# The ratio is a probabilistic measure of similarity within a context P(A/B)
+				#
+				Xo_ 	= list(Set(bag[i]) - Set(bag[ii]))
+				Yo_ 	= list(Set(bag[ii]) - Set(bag[i]))
+				size = len(Xo_)
+				r = []
+				g = NGram(Yo_)
+				for index in range(0,size):
+					id = Xo_[index]
+					#X = list(process.extractOne([id],Yo_))
+					X = [[term , fuzz.ratio(id,term)/100] for term in Yo_]
+					if len(X) == 0:
+						continue
+					X = max(X)
+					if X[1] > 0.5 and len(X[0]) > len(id) and id not in info:
+						X[1] = X[1]
+						info[id] = X
+						print [id,Pz]+info[id]
+	for id in info:
+		print [id,info[id]]
 f = open('/Users/steve/Downloads/data/Accreditation_2015_12/Accreditation_2015_12.csv','rU')
 data = [line.split(',') for line in f]
 thread = SimpleContextLearner(data,2)

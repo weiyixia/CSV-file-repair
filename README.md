@@ -1,5 +1,11 @@
 # Character File Repair Utility
 
+This utility repairs character delimited files that have either a misplaced delimiter and or an arbitrary new line where it shouldn't.
+The utility leverages machine-learning approaches and can be run in either 
+
+* Filter mode, where the utility removes structurally problematic records
+* Repair mode, where the utility will attempt to repair problematic records.
+
 <script src="https://google-code-prettify.googlecode.com/svn/loader/run_prettify.js"></script>
 
 #Motivation

@@ -6,6 +6,8 @@ The utility leverages machine-learning approaches and can be run in either
 * Filter mode, where the utility removes structurally problematic records
 * Repair mode, where the utility will attempt to repair problematic records.
 
+In general character delimited files issues are rooted in arbitrary delimiter or unexpected new lines. Additionally we address the issue of encoding and non-ascii character. The learning algorithm we design focuses on these issues.
+
 <script src="https://google-code-prettify.googlecode.com/svn/loader/run_prettify.js"></script>
 
 #Motivation

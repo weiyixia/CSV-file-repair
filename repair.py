@@ -551,7 +551,7 @@ class Filter(Thread):
 		self.handler.init()
 	
 	def format (self,row):
-		return ",".join(row+['\n']) ;
+		return ",".join(row)+'\n' ;
 
 	"""
 

@@ -434,16 +434,17 @@ class SampleBuilder(Thread):
 
 	def row_xchar(self,sample):
 		if self.xchar is None:
-			m = {',':0,'\t':0,'|':0} 
+			m = {',':[],'\t':[],'|':[]} 
 			delim = m.keys()
 			for row in sample:
 				for xchar in delim:
-					m[xchar] = m[xchar] + len(row.split(xchar))
+					m[xchar].append(len(row.split(xchar)))
 			#
-			# At this point we have the results of the evaluation
-			# We will select the maximum of the evaluation
+			# The delimiter with the smallest least variance
+			# This would be troublesome if there many broken records sampled
 			#
-			index = m.values().index( max(m.values()))
+			[m[id] = np.var(m[id]) for id in m]						
+			index = m.values().index( min(m.values()))
 			self.xchar = m.keys()[index]
 		
 		return self.xchar
@@ -602,6 +603,7 @@ class Repair(Filter):
 		self.partial	= []
 		self.threads = {'px':InspectProbability(self.sample),'numeric':InspectNumericField(self.sample),'len':InspectFieldLength(self.sample),'date':InspectDateField(self.sample)} ;
 		[thread.start() for thread in self.threads.values()]
+		self.row_index = 0
 
 	"""
 
@@ -610,13 +612,16 @@ class Repair(Filter):
 
 	"""
 	def post(self,id,row):
-		Filter.post(self,id,row)
+		Filter.post(self,id,row)		
 		if id == 'broken':
 			if len(row) > self.ncols:
 				
 				self.extra.append( self.clean(row))
 			else:
+					
 				self.partial.append(self.clean(row))
+		else:
+			self.current_row = row
 	def run(self):
 		Filter.run(self) ;
 		ids = self.threads.keys()

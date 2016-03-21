@@ -43,8 +43,10 @@ import numpy as np
 from sets import Set
 from fuzzywuzzy import fuzz, process
 from ngram import NGram
+from Queue import Queue
 
 class ILearnContext(Thread):
+	
 	"""
 		The context learner will need an already processed  a dataset
 
@@ -65,7 +67,7 @@ class ILearnContext(Thread):
 		@param field  index of the field we want to extract concepts from
 	"""
 	def organize(self,sample,field) :
-
+		info = {}
 		for row in sample:
 			value = self.getTerms(row[field])
 			#
@@ -80,9 +82,16 @@ class ILearnContext(Thread):
 				if id not in self.bags :
 					self.bags[id] = []
 					self.bag_sizes.append(len(value))
-				self.bags[id].append(value) ;
+				if str(value) not in info:
+					self.bags[id].append(value) ;
+				info[str(value)]  = 1
 			else:
 				self.test.append(value)
+		#
+		# At this point we have insured that the n-grams don't have duplicates
+		# Duplicate data provides very little context for learning
+		#
+		del info
 
 	"""
 		This function expands a field value into it's various terms
@@ -134,64 +143,131 @@ class SimpleContextLearner(ILearnContext):
         #
         # We need to determine the best size of contexts from which we can learn
         # We use a basic statistical aproach to achieve (Central Limit Theorem)
-        #
+	#
         ii = [ len(self.bags[id]) for id in self.bags.keys() if int(id) > 2]
 	id = self.bags.keys()[ii.index(np.max(ii))]
 	self.size = int(id) ;
+	
+    
     def run(self):
         context = self.build(self.size)
         bag = self.bags[str(self.size)]
 	N = len(context) #-- same as in bag
+	NUMBER_THREADS = 10
+	offset = int(N/NUMBER_THREADS)
 
-	info = {}
-	for i in range(0,N):
-		Xo = context[i]
-		for ii in range(0,N):
-			if i == ii or bag[i] == bag[ii]:
-				continue ;
-			phrase = bag[ii]
-			Yo = context[ii]
-			#
-			# We look for common terms within the 2 candidates
-			# Once the intersections is found we should determine if they make up a context
-			#
-			Z = Set(bag[i]) & Set(bag[ii])
-			#
-			# Having common terms doesn't mean identical context
-			# Unless the size of the intersection is greater or equal to an n-gram
-			#
-			if len(Z) > 0 and  len(Z) >= len(Xo[0]):
+	#
+	# We launch NUMBER_THREADS to learn in parrallel
+	# The results learnt will be accumulated in python Queue
+	# NOTE: duplicates have been removed, so there is no need to consolidate results
+
+	#	
+	
+	self.queue = Queue()
+	threads = {}
+	for i in range(0,NUMBER_THREADS):
+		xi = i * offset
+		yi = i * offset + offset
+		if i == NUMBER_THREADS-1:
+			yi = N
+		
+		thread = Clean(context[xi:yi],bag);
+		thread.init(self.queue)
+		thread.name = str(i)		
+		thread.start()
+		threads[str(i)] = thread
+
+"""
+	The plugins determine the context-based operation to be undertaken:
+		- cleansing data
+		- concept mining
+		- ...
+"""
+class Plugin(Thread):
+	def __init__(self,context,bag):
+		Thread.__init__(self);
+		self.context 	= context ;
+		self.bag 	= bag
+		self.queue	= None
+	"""
+		setting a queue in case the client has chosen to perform multi-threading
+		@param queue	python built-in queue
+	"""
+	def init(self,queue):
+		self.queue = queue 
+"""
+	This class will mine context and attempt to find various representations of a given word
+
+	Use Case
+	If a stakeholder wants to cleanup address fields,
+	This class should be able to make an inference like Ave is Avenue with a degree of confidence
+"""
+class Clean(Plugin):
+	def __init__(self,context,bag):
+		Plugin.__init__(self,context,bag) ;
+		self.info = {}
+	"""
+		@pre len(context) == len(bag)
+	"""
+	def run(self):
+		N = len(self.context)
+		#print N, 'items '
+		imatches = []
+		found = {}
+		for i in range(0,N):
+			Xo_ = list(self.bag[i])	# skip_gram
+			Y = (Set(range(0,N)) - (Set([i]) | Set(imatches)))
+			for ii in Y:
+				if self.bag[i] == self.bag[ii]:
+					imatches.append(ii) ;
+					continue
 				#
-				# Common terms in context evaluate the probability of being of the same context
-				# Pz :
+				# We are sure we are not comparing the identical phrase
+				# NOTE: Repetition doesn't yield learning, rather context does.
+				# Lets determine if there are common terms
 				#
-				Pz =  len(Z) / len(phrase)
-				#
-				# The levenshtein distances give us the matches of
-				# X will contain the tuple {word,ratio}. 
-				# The ratio is a probabilistic measure of similarity within a context P(A/B)
-				#
-				Xo_ 	= list(Set(bag[i]) - Set(bag[ii]))
-				Yo_ 	= list(Set(bag[ii]) - Set(bag[i]))
-				size = len(Xo_)
-				r = []
-				g = NGram(Yo_)
-				for index in range(0,size):
-					id = Xo_[index]
-					X = [[term , fuzz.ratio(id,term)/100] for term in Yo_]
-					if len(X) == 0:
-						continue
-					X = max(X)
-					if X[1] > 0.5 and len(X[0]) > len(id) and id not in info:
+				Z = Set(self.bag[i]) & Set(self.bag[ii])
+				
+				if len(Z) > 0 and len(Xo_) > 0:
+
+					Xo_ 	= Set(Xo_) - Z # - list(Set(bag[i]) - Set(bag[ii]))
+					Yo_ 	= Set(self.bag[ii]) - Z #list(Set(bag[ii]) - Set(bag[i]))
+					size 	= len(Xo_)
+					g = NGram(Yo_)	
+					for term in Xo_:
+						
+						xo = g.search(term)
+						if len(xo) > 0 and len(term) < 4:
+							xo = xo[0]
+						else:
+							continue;
+						xo = list(xo)
+						xo_i = self.bag[i].index(term) 
+						yo_i = self.bag[ii].index(xo[0])
 						#
-						# @TODO: Apply some form of joint probability, unfortunately it doesn't lend itself to bayesian analysis
-						# The joint probability will be used and needs a laymans formulation
+						# We have the pair, and we will compute the distance
 						#
-						X[1] = X[1]
-						info[id] = X
-						print [id,Pz]+info[id]
-	for id in info:
-		print [id,info[id]]
+						ratio = fuzz.ratio(term,xo[0])/100
+						is_subset = len(Set(term) & Set(xo[0])) == len(term)
+						if is_subset and len(term) < len(xo[0]) and ratio > 0.5 and xo_i ==yo_i:
+							xo[1] = [ratio,xo_i]
+							if (term not in self.info):
+								#xo[1] = ratio
+								self.info[term] = xo
+							elif term in self.info and ratio > self.info[term][1] :							
+								self.info[term] = xo
+							imatches.append(ii)
+							#break;
+		#
+		# At this point we consolidate all that has been learnt
+		# And make it available to the outside word, otherwise client should retrieve it
+		#
+		if self.queue is not None:
+			for term in self.info:				
+				self.queue.put([term]+ self.info[term])
+			#self.queue.task_done()
+			
+				#print term, self.info[term]	
 f = open('/Users/steve/Downloads/data/Accreditation_2015_12/Accreditation_2015_12.csv','rU')
 data = [line.split(',') for line in f]
 thread = SimpleContextLearner(data,2)

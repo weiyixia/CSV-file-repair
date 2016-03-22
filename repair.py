@@ -443,7 +443,7 @@ class SampleBuilder(Thread):
 			# The delimiter with the smallest least variance
 			# This would be troublesome if there many broken records sampled
 			#
-			m = {id: np.var(m[id]) for id in m.keys()}
+			m = {id: np.var(m[id]) for id in m.keys() if np.mean(m[id])>1}
 			index = m.values().index( min(m.values()))
 			self.xchar = m.keys()[index]
 		

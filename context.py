@@ -43,7 +43,7 @@ import numpy as np
 from sets import Set
 from fuzzywuzzy import fuzz, process
 from ngram import NGram
-from Queue import Queue
+from Queue import Queue, PriorityQueue, LifoQueue
 
 class ILearnContext(Thread):
 	
@@ -153,7 +153,7 @@ class SimpleContextLearner(ILearnContext):
         context = self.build(self.size)
         bag = self.bags[str(self.size)]
 	N = len(context) #-- same as in bag
-	NUMBER_THREADS = 10
+	NUMBER_THREADS = 1
 	offset = int(N/NUMBER_THREADS)
 
 	#
@@ -164,19 +164,29 @@ class SimpleContextLearner(ILearnContext):
 	#	
 	
 	self.queue = Queue()
-	threads = {}
+	threads = []
+	
 	for i in range(0,NUMBER_THREADS):
 		xi = i * offset
 		yi = i * offset + offset
 		if i == NUMBER_THREADS-1:
 			yi = N
-		
+		print [xi,yi,(yi-xi)]
 		thread = Clean(context[xi:yi],bag);
+		thread.name = str(i)
+		
 		thread.init(self.queue)
-		thread.name = str(i)		
+		thread.setDaemon(True)
 		thread.start()
-		threads[str(i)] = thread
-
+		thread.join()
+		threads.append(thread)
+	print "waiting ",NUMBER_THREADS
+	
+	#for thread in threads:
+		
+	while self.queue.empty() == False:
+		print self.queue.get()
+	
 """
 	The plugins determine the context-based operation to be undertaken:
 		- cleansing data
@@ -253,9 +263,9 @@ class Clean(Plugin):
 							xo[1] = [ratio,xo_i]
 							if (term not in self.info):
 								#xo[1] = ratio
-								self.info[term] = xo
+								self.info[term] = [term,xo[0]]+xo[1]
 							elif term in self.info and ratio > self.info[term][1] :							
-								self.info[term] = xo
+								self.info[term] = [term,xo[0]]+xo[1]
 							imatches.append(ii)
 							#break;
 		#
@@ -263,9 +273,12 @@ class Clean(Plugin):
 		# And make it available to the outside word, otherwise client should retrieve it
 		#
 		if self.queue is not None:
-			for term in self.info:				
-				self.queue.put([term]+ self.info[term])
-			#self.queue.task_done()
+			
+			for term in self.info:	
+				value = list(self.info[term])			
+				self.queue.put(value)
+				
+			
 			
 				#print term, self.info[term]	
 f = open('/Users/steve/Downloads/data/Accreditation_2015_12/Accreditation_2015_12.csv','rU')

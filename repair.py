@@ -440,7 +440,7 @@ class SampleBuilder(Thread):
 				for xchar in delim:
 					m[xchar].append(len(row.split(xchar)))
 			#
-			# The delimiter with the smallest least variance
+			# The delimiter with the smallest variance, provided the mean is greater than 1
 			# This would be troublesome if there many broken records sampled
 			#
 			m = {id: np.var(m[id]) for id in m.keys() if np.mean(m[id])>1}
@@ -618,7 +618,9 @@ class Repair(Filter):
 				
 				self.extra.append( self.clean(row))
 			else:
-					
+				#
+				# If a len(row) == 1 and self.current_row is not None
+				#	self.partial.append(self.current_row)	
 				self.partial.append(self.clean(row))
 		else:
 			self.current_row = row

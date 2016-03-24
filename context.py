@@ -37,13 +37,13 @@
 
 
 from __future__ import division
-from threading import Thread
+from threading import Thread, RLock
 import re
 import numpy as np
 from sets import Set
 from fuzzywuzzy import fuzz, process
 from ngram import NGram
-from Queue import Queue, PriorityQueue, LifoQueue
+from Queue import Queue
 
 class ILearnContext(Thread):
 	
@@ -153,7 +153,7 @@ class SimpleContextLearner(ILearnContext):
         context = self.build(self.size)
         bag = self.bags[str(self.size)]
 	N = len(context) #-- same as in bag
-	NUMBER_THREADS = 1
+	NUMBER_THREADS = 2
 	offset = int(N/NUMBER_THREADS)
 
 	#
@@ -164,28 +164,38 @@ class SimpleContextLearner(ILearnContext):
 	#	
 	
 	self.queue = Queue()
+	q = []
 	threads = []
-	
+	lock = RLock()
 	for i in range(0,NUMBER_THREADS):
 		xi = i * offset
 		yi = i * offset + offset
 		if i == NUMBER_THREADS-1:
 			yi = N
 		print [xi,yi,(yi-xi)]
-		thread = Clean(context[xi:yi],bag);
+		thread = Clean( list(context[xi:yi]),bag);
 		thread.name = str(i)
-		
-		thread.init(self.queue)
-		thread.setDaemon(True)
-		thread.start()
-		thread.join()
 		threads.append(thread)
-	print "waiting ",NUMBER_THREADS
-	
-	#for thread in threads:
+		thread.init(self.queue,lock)
+		#thread.setDaemon(True)
+		thread.start()
+	for thread in threads:
 		
+		thread.join()
+		
+		
+		if  np.sum([int(thread.isAlive() == False)for thread in threads]) == len(threads):
+			break	
+	#	if thread.isAlive() == False:
+	#		[q.append(thread.info[value]) for value in thread.info]
+	#		id = thread.info.keys()[0]
+	#		print ['thread - ',thread.name,id,thread.info[id]]	
+	
 	while self.queue.empty() == False:
 		print self.queue.get()
+	#for row in q:
+	#	print row
+		
 	
 """
 	The plugins determine the context-based operation to be undertaken:
@@ -199,12 +209,14 @@ class Plugin(Thread):
 		self.context 	= context ;
 		self.bag 	= bag
 		self.queue	= None
+		self.lock 	= None
 	"""
 		setting a queue in case the client has chosen to perform multi-threading
 		@param queue	python built-in queue
 	"""
-	def init(self,queue):
-		self.queue = queue 
+	def init(self,queue,lock):
+		self.queue = queue
+		self.lock = lock 
 """
 	This class will mine context and attempt to find various representations of a given word
 
@@ -221,12 +233,13 @@ class Clean(Plugin):
 	"""
 	def run(self):
 		N = len(self.context)
-		#print N, 'items '
+		
 		imatches = []
 		found = {}
+		Y = range(0,len(self.bag))
 		for i in range(0,N):
 			Xo_ = list(self.bag[i])	# skip_gram
-			Y = (Set(range(0,N)) - (Set([i]) | Set(imatches)))
+			#Y = (Set(range(0,N)) - (Set([i]) | Set(imatches)))
 			for ii in Y:
 				if self.bag[i] == self.bag[ii]:
 					imatches.append(ii) ;
@@ -260,23 +273,28 @@ class Clean(Plugin):
 						ratio = fuzz.ratio(term,xo[0])/100
 						is_subset = len(Set(term) & Set(xo[0])) == len(term)
 						if is_subset and len(term) < len(xo[0]) and ratio > 0.5 and xo_i ==yo_i:
+							
 							xo[1] = [ratio,xo_i]
 							if (term not in self.info):
 								#xo[1] = ratio
 								self.info[term] = [term,xo[0]]+xo[1]
 							elif term in self.info and ratio > self.info[term][1] :							
 								self.info[term] = [term,xo[0]]+xo[1]
-							imatches.append(ii)
-							#break;
+							
+							
+							#imatches.append(ii)
+							break;
 		#
 		# At this point we consolidate all that has been learnt
 		# And make it available to the outside word, otherwise client should retrieve it
 		#
+		self.lock.acquire()
 		if self.queue is not None:
 			
 			for term in self.info:	
-				value = list(self.info[term])			
+				value = ['thread # ',self.name]+list(self.info[term])							
 				self.queue.put(value)
+		self.lock.release()
 				
 			
 			

@@ -1,3 +1,15 @@
+#Motivation
+
+This engine demonstrates how a learning component can serve as a solution to a problem that would otherwise have been addressed by developing custom parsers to every field and error associated with a dataset. 
+
+**1. Reducing data preparation tasks**
+
+	In machine learning most of time is spent on [janitorial tasks] (http://www.pcworld.com/article/3047665/hottest-job-data-scientists-say-theyre-still-mostly-digital-janitors.html]). The file repair utility handles some of that.
+
+**2. Integration of learning components in software engineering**
+
+	Writing parsers for every case/field/error and dataset is NEITHER practical NOR scalable. So we propose a learning algorithm/component because it is code written once that can generalize without new code being written
+
 # Character File Repair Utility
 
 This utility repairs character delimited files that have either a misplaced delimiter and or an arbitrary new line where it shouldn't.
@@ -9,12 +21,6 @@ The utility leverages machine-learning approaches and can be run in either
 In general character delimited files issues are rooted in arbitrary delimiter or unexpected new lines. Additionally we address the issue of encoding and non-ascii character. The learning algorithm we design focuses on these issues.
 
 <script src="https://google-code-prettify.googlecode.com/svn/loader/run_prettify.js"></script>
-
-#Motivation
-
-This engine demonstrates how a learning component can serve as a solution to a problem that would otherwise have been addressed by developing custom parsers to every field and error associated with a dataset. 
-
-Writing parsers for every case/field/error and dataset is NEITHER practical NOR scalable. So we propose a learning algorithm/component because it is code written once that can generalize without new code being written
 
 #Description
 

@@ -4,11 +4,11 @@ This engine demonstrates how a learning component can serve as a solution to a p
 
 **1. Reducing data preparation tasks**
 
-	In machine learning most of time is spent on [janitorial tasks] (http://www.pcworld.com/article/3047665/hottest-job-data-scientists-say-theyre-still-mostly-digital-janitors.html]). The file repair utility handles some of that.
+In machine learning most of time is spent on [janitorial tasks] (http://www.pcworld.com/article/3047665/hottest-job-data-scientists-say-theyre-still-mostly-digital-janitors.html]). The file repair utility handles some of that.
 
 **2. Integration of learning components in software engineering**
 
-	Writing parsers for every case/field/error and dataset is NEITHER practical NOR scalable. So we propose a learning algorithm/component because it is code written once that can generalize without new code being written
+Writing parsers for every case/field/error and dataset is NEITHER practical NOR scalable. So we propose a learning algorithm/component because it is code written once that can generalize without new code being written
 
 # Character File Repair Utility
 

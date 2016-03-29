@@ -217,6 +217,112 @@ class Plugin(Thread):
 	def init(self,queue,lock):
 		self.queue = queue
 		self.lock = lock 
+class ICleanse(ILearnContext):
+	def __init__(self,sample,field):
+	        ILearnContext.__init__(self,sample,field) ;
+		#
+		# We need to determine the best size of contexts from which we can learn
+		# We use a basic statistical aproach to achieve (Central Limit Theorem)
+		#
+		ii = [ len(self.bags[id]) for id in self.bags.keys() if int(id) > 2]
+		self.id = self.bags.keys()[ii.index(np.max(ii))]
+		self.size = int(self.id) ;
+		self.threads = {}
+		self.corpus = self.bags[self.id]
+		self.info = {}
+	#
+	# phrase
+	def map(self,phrase):
+		for term in phrase:
+			if len(term) > 4:
+				continue
+			for word in self.corpus:
+				z = Set(term) & Set(word)
+				
+				matches = []
+				if len(z) > 0 and len(z) < len(term):
+					#
+					#
+					g=NGram(z - Set(term))
+					#matches = g.search(term)
+				else:
+					#
+					# At this point we assume context is not informative
+					# In the advent of context not being informative, we resort to fuzzy lookup
+					#		
+					g = NGram(word)
+					#matches = g.search(term)
+				g.remove(term)
+				matches = g.search(term)
+				key = None
+				value = None					
+				if len(matches) > 0:
+					matches = list(matches[0])
+					Pz_ = len(matches) / self.size
+					Px_ = fuzz.ratio(term,matches[0]) / 100
+					if Px_ > 0.5 and len(term) < len(matches[0]) and len(matches[0]) > 4:
+						key = term
+						value= {}
+						value= [matches[0],Pz_,Px_,1]
+						self.emit (key,value)
+
+	
+	def reduce(self,key,values):
+	
+		N =  np.sum([values[id][2] for id in values]);
+		MaxContext = np.max([ values[id][0] for id in values])
+		r = []
+		for id in values:
+			row = values[id]
+			if row[2]/N > 0.5 and row[2] > 32 and row[0] == MaxContext:
+				r.append([key,id,row[1],row[2],N])
+		return r
+		#N = np.sum([row[2] for row in values])
+		#return [row for row in values if row[2]/N > 0.5]
+		
+	def emit(self,key,value):
+		if key not in self.info:
+			self.info[key] = {}
+		id = str(value[0])
+		del value[0]
+		if id not in self.info[key]:
+			self.info[key][id] = value
+		else:
+			#
+			# updating our findings ...
+			#
+			row = self.info[key][id]
+			for i in range(0,len(value) -1) :
+				if value[i] > row[i]:
+					row[i] = value[i]
+					
+			row[2] = 1 + row[2]
+			self.info[key][id] = row
+				
+		
+		
+		
+	def run(self):
+		#context = self.build(self.size)
+		N = 750; #len(self.corpus)
+		#self.map(self.corpus[190])
+		[self.map(self.corpus[i]) for i in range(0,N)]
+		#[self.map(ngrams) for ngrams in context ]
+		for key in self.info:
+			
+			key = 'Rd'
+			value = self.info[key]			
+			r =  self.reduce(key,value)
+			if len(r) > 0:
+				print r
+			break
+					
+		
+		#print key
+		#print value
+		#print next(self.reduce(key,value))
+		
+		
 """
 	This class will mine context and attempt to find various representations of a given word
 
@@ -241,7 +347,7 @@ class Clean(Plugin):
 			Xo_ = list(self.bag[i])	# skip_gram
 			#Y = (Set(range(0,N)) - (Set([i]) | Set(imatches)))
 			for ii in Y:
-				if self.bag[i] == self.bag[ii]:
+				if self.bag[i] == self.bag[ii] :
 					imatches.append(ii) ;
 					continue
 				#
@@ -282,7 +388,7 @@ class Clean(Plugin):
 								self.info[term] = [term,xo[0]]+xo[1]
 							
 							
-							#imatches.append(ii)
+							imatches.append(ii)
 							break;
 		#
 		# At this point we consolidate all that has been learnt
@@ -301,5 +407,5 @@ class Clean(Plugin):
 				#print term, self.info[term]	
 f = open('/Users/steve/Downloads/data/Accreditation_2015_12/Accreditation_2015_12.csv','rU')
 data = [line.split(',') for line in f]
-thread = SimpleContextLearner(data,2)
+thread = ICleanse(data,2)
 thread.start()

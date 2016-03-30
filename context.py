@@ -260,7 +260,7 @@ class ICleanse(ILearnContext):
 					matches = list(matches[0])
 					Pz_ = len(matches) / self.size
 					Px_ = fuzz.ratio(term,matches[0]) / 100
-					if Px_ > 0.5 and len(term) < len(matches[0]) and len(matches[0]) > 4:
+					if Px_ > 0.5 and len(term) < len(matches[0]) and len(matches[0]) >= 4:
 						key = term
 						value= {}
 						value= [matches[0],Pz_,Px_,1]
@@ -275,7 +275,8 @@ class ICleanse(ILearnContext):
 		for id in values:
 			row = values[id]
 			if row[2]/N > 0.5 and row[2] > 32 and row[0] == MaxContext:
-				r.append([key,id,row[1],row[2],N])
+				r.append([key,id,row[1],round(row[2]/N,2) ])
+			
 		return r
 		#N = np.sum([row[2] for row in values])
 		#return [row for row in values if row[2]/N > 0.5]
@@ -310,12 +311,12 @@ class ICleanse(ILearnContext):
 		#[self.map(ngrams) for ngrams in context ]
 		for key in self.info:
 			
-			key = 'Rd'
+			
 			value = self.info[key]			
 			r =  self.reduce(key,value)
 			if len(r) > 0:
 				print r
-			break
+			
 					
 		
 		#print key
